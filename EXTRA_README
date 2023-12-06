@@ -1,0 +1,27 @@
+Some scripts are included for convenience.
+
+Linux:
+
+boot_linux.sh
+Attempts to boot a minimal Linux OS with a dtb, OpenSBI, a kernel image and an initramfs.
+Expects the OpenSBI binary to be fw_jump.bin, kernel image to be Image, initramfs to be images/rootfs.cpio, device tree to be devicetree/singlehart.dtb
+
+debug_boot.sh
+Same as boot_linux.sh, but runs it in gdb.
+
+spike_boot.sh
+Same as boot_linux.sh, but uses the Spike emulator instead.
+As Spike does not support loading an initramfs, it should panic when mounting the filesystem.
+
+Tracing:
+
+make_main_trace.sh
+Boots Linux (without initramfs, so it should panic when mounting FS) while tracing the program counter in each cycle.
+
+make_spike_trace.sh
+Does the same thing as make_main_trace.sh, but uses the Spike emulator instead of this emulator.
+
+Device tree:
+
+devicetree/compile_dtb.sh
+Updates singlehart.dtb to reflect changes in singlehart.dts .

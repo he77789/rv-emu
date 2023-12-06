@@ -1,0 +1,17 @@
+misaligned reservations may not work correctly
+
+OUTDATED: this was previously true, but performance has since been improved by optimizations
+PMP causes a heavy hit on performance
+~70MHz without PMP, using -O3, context switches
+~100MHz without PMP, using -O3, tight loop
+
+~8MHz with PMP, using -O3, with naive first bit finding, context switches
+~31MHz with PMP, using -O3, with ffsll, context switches
+~49MHz with PMP, using -O3, with ffsll, tight loop
+
+After consolidating PMP checks of multi-byte reads:
+~33MHz using -O0, tight loop
+~51MHz using -Os, tight loop
+~67MHz using -O2, tight loop
+~72MHz using -O3, tight loop
+~53MHz using -O3, context switches

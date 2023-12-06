@@ -1,0 +1,60 @@
+rv-emu: an RISC-V emulator from scratch in C++
+
+Development started in March 2023
+First uploaded to Github on Dec 6 2023
+
+Compile:
+`make main` will build the emulator.
+`make clean` will remove all object files in the build folder.
+`make rebuild` is equivalent to `make clean; make main`
+
+Usage:
+`./main <args>`
+Possible arguments:
+-f <path to firmware>
+-k <path to kernel>
+-i <path to initrd>
+-m <memory size, default 512MiB>
+-c <hart count, default 1>
+-d <path to device tree blob>
+-e dump the whole memory into a file named "mem_dump" at exit
+-p disable PTY setup for emulated UART terminal, and use stdio instead
+-h print this help message and exit
+
+ELF formatted executables are not supported; binaries are expected to be raw binaries created with objdump.
+
+By default, a pseudoterminal is created for the UART IO, which can be accessed with the command `screen /path/to/pty` in another terminal.
+In the diagnostic messages at the start of the emulator, the path to the pty will be printed out.
+Use -p to disable the pty and do the IO in the same terminal instead.
+
+Compile-time options can be changed in constants.h
+
+
+Instruction set: RV64IMAZicsr_Zifencei
+Modes Supported: M,S,U
+Virtual Memory: Supports Bare, Sv39, Sv48, Sv57
+
+Load addresses:
+Start address: 0x1000 (contains built-in hardcoded boot sequence)
+DTB load address: 0x1100 (RO)
+Firmware (OpenSBI, BBL etc): 0x8000'0000
+Kernel: 0x8020'0000
+initrd: 0x8820'0000
+
+If firmware is not provided but kernel is, the kernel is loaded at 0x8000'0000 instead
+
+Max sizes:
+DTB: 32 KiB
+Firmware: 2MiB
+Kernel: 254MiB
+initrd: 128MiB
+
+Supported hardware devices:
+RISC-V ACLINT MTIMER, MSWI
+RISC-V PLIC
+NS16550A UART serial terminal
+(incomplete, does not work) virtio block device over memory-mapped IO
+
+Defaults:
+Memory: 512MiB
+Harts: 1

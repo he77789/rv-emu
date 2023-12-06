@@ -1,0 +1,6 @@
+build/*
+fw_jump*
+perf.data*
+devicetree/other_dtb
+main
+mem_dump
