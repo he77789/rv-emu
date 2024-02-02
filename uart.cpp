@@ -11,7 +11,7 @@
 #include "io.h"
 #include "plic.h"
 
-#define IBUF_SIZE 256
+#define IBUF_SIZE 16
 // circular buffer for input
 char input_buffer[IBUF_SIZE];
 char* read_ptr;
@@ -19,7 +19,7 @@ char* write_ptr;
 
 uint64_t output_byte;
 bool dlab = false;
-bool rready = false;
+uint16_t pending_in = 0;
 uint8_t ls = 0;
 uint8_t ms = 0;
 uint8_t fifo_trigger_lvl = 1;
@@ -57,14 +57,11 @@ void uart_loop() {
     }
     tx_offset = 0;
     memset(output, 0, IBUF_SIZE);
-    tx_required = false;
     regs[5] |= 0b1100000;
     if (regs[1] & 0b10) { // THR empty interrupt enabled
-      if (regs[2] != 0b0100) { // receive interrupts have higher priority, don't overwrite
-        regs[2] = 0b0010;
-      }
-      plic_send_int(10);
+      uart_sendint(0b0010);
     }
+    tx_required = false;
   }
 }
 
@@ -80,9 +77,10 @@ void* uart_r(uint64_t offset, [[maybe_unused]] uint8_t len) {
       if (dlab) {
         output_byte = ls;
       } else {
-        if (rready) {
+        if (pending_in > 0) {
           output_byte = *read_ptr++;
           if ((read_ptr - input_buffer) > IBUF_SIZE) read_ptr = input_buffer;
+          pending_in--;
         } else {
           output_byte = 0;
         }
@@ -99,12 +97,11 @@ void* uart_r(uint64_t offset, [[maybe_unused]] uint8_t len) {
       output_byte = regs[offset];
   }
   
-  if (offset == 2 && regs[2] == 0b0010) {
-    regs[2] = 0b0001;
+  if (offset == 2 && (regs[2] & 0xF) == 0b0010) {
+    uart_clearint();
   }
   
-  rready = read_ptr < write_ptr;
-  if (rready) {regs[5] |= rready;}
+  if (pending_in > 0) {regs[5] |= 1;}
   else {regs[5] &= (~1);}
   
   return &output_byte;
@@ -117,15 +114,19 @@ void uart_w(uint64_t offset, void* dataptr, [[maybe_unused]] uint8_t len) {
   }
   
   if (offset == 0) {
-    if (regs[2] == 0b0010) { // THR empty
-      regs[2] = 0b0001;
+    if ((regs[2] & 0xF) == 0b0010) {
+      uart_clearint();
     }
     while (tx_required); // spinlock to prevent race condition on output
     char data_char = *(char*)dataptr;
     output[tx_offset] = data_char;
     tx_offset++;
-    //regs[5] &= ~(0b1100000);
-    /* if (tx_offset >= (IBUF_SIZE - 4) || data_char == 0xa) */ {
+    // transmitter buffer not empty
+    regs[5] &= ~(0b1000000);
+    if (tx_offset >= (IBUF_SIZE - 1) || data_char == 0xa) {
+      // THR full
+      regs[5] &= ~(0b0100000);
+      // trigger printing
       std::lock_guard<std::mutex> uart_lock(uart_mtx);
       tx_required = true;
       uart_cv.notify_one();
@@ -154,22 +155,55 @@ void uart_w(uint64_t offset, void* dataptr, [[maybe_unused]] uint8_t len) {
 const uint8_t uart_int_prio[] = {4, 3, 2, 1, 0, 6, 2, 5};
 
 void uart_sendint(uint8_t code) {
-  if (uart_int_prio[code] < uart_int_prio[regs[]]) {
-    return; // higher-priority interrupt is pending
+  if ((regs[2] & 0xF) != 0x1) { // an interrupt is pending
+    if (uart_int_prio[code >> 1] < uart_int_prio[(regs[2] >> 1) & 0b111]) {
+      return; // higher-priority interrupt is pending
+    }
   }
+  regs[2] &= ~(0xF);
+  regs[2] |= code & 0xF;
+  plic_send_int(10);
 }
 
+void uart_clearint() {
+  regs[2] &= ~(0xF);
+  regs[2] |= 0x0001;
+}
+
+uint16_t uart_timeout = 0;
 // takes in one character from console and monitors interrupts
 void uart_chk() {
   char ch = pty_getc();
-  if (ch == -1) return;
-  *write_ptr = ch;
-  write_ptr++;
-  if ((write_ptr - read_ptr) > fifo_trigger_lvl) {
-    if (regs[1] & 1) { // data ready interrupt active
-      regs[2] = 0b0100;
-      plic_send_int(10);
+  if (ch != -1) {
+    *write_ptr = ch;
+    write_ptr++;
+    pending_in++;
+    if ((write_ptr - read_ptr) > fifo_trigger_lvl) {
+      if (regs[1] & 1) { // data ready interrupt active
+        uart_sendint(0b0100);
+      }
     }
+    if ((write_ptr - input_buffer) > IBUF_SIZE) write_ptr = input_buffer;
   }
-  if ((write_ptr - input_buffer) > IBUF_SIZE) write_ptr = input_buffer;
+  
+  // receiver timeout
+  if (pending_in > 0) {
+    uart_timeout++;
+  }
+  if (uart_timeout > 4) {
+    uart_sendint(0b0100);
+    uart_timeout = 0;
+  }
+  
+  // check conditions regularly
+  if (tx_offset == 0) {
+    regs[5] |= 0b1100000;
+    if (regs[1] & 0b10) { // THR empty interrupt enabled
+      uart_sendint(0b0010);
+    }
+  } else if (tx_required == false) {
+    std::lock_guard<std::mutex> uart_lock(uart_mtx);
+    tx_required = true;
+    uart_cv.notify_one();
+  }
 }
