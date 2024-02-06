@@ -118,3 +118,5 @@ void reset_state(HartState &hs, uint16_t hartid);
 
 uint64_t* csr_from_addr(HartState &hs, uint16_t addr);
 HartException pmpcfg_rw(HartState &hs, uint16_t addr, uint64_t* rvalue, uint64_t wvalue, uint8_t funct);
+
+extern bool sig_mode;

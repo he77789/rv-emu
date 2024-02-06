@@ -21,6 +21,9 @@ typedef __uint128_t uint128_t;
 // for change by debuggers
 volatile uint64_t breakpoint = 0;
 
+// for signature
+bool sig_mode=false;
+
 // false to halt
 bool cycle(HartState &hs){
   /*
@@ -64,6 +67,9 @@ bool cycle(HartState &hs){
   }
   */
   if (exc != HartException::NOEXC) {
+    if (exc == HartException::BPOINT && sig_mode) {
+      return false;
+    }
     goto cycle_end;
   }
   

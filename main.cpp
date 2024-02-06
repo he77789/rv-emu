@@ -28,6 +28,7 @@ Possible arguments:\n\
 -e dump the whole memory into a file named \"mem_dump\" at exit\n\
 -p disable PTY setup for emulated UART terminal, and use stdio instead\n\
 -h print this help message and exit\n\
+-s enable signature dumping and specify signature file\
 "
 
 void sigint_handler(int signum);
@@ -54,8 +55,9 @@ int main(int argc, char** argv){
   char* kernelfile = nullptr;
   char* dtbfile = nullptr;
   char* initrdfile = nullptr;
+  char* signaturefile = nullptr;
   char copt;
-  while ((copt = getopt(argc, argv, "f:k:i:m::c::d:eph")) != -1){
+  while ((copt = getopt(argc, argv, "f:k:i:m::c::d:s:eph")) != -1){
     switch (copt){
       case 'f':
         fwfile = optarg;
@@ -87,6 +89,10 @@ int main(int argc, char** argv){
         dbg_print(dtbfile);
         dbg_endl();
         break;
+      case 's':
+        signaturefile = optarg;
+        sig_mode = true;
+        break;
       case 'e':
         dump_mem_atexit = true;
         break;
@@ -109,8 +115,8 @@ int main(int argc, char** argv){
     }
   }
   if (! (fwfile || kernelfile)) {
-    dbg_print("Neither fw or kernel passed in command line!");
-    dbg_endl();
+    dbgerr_print("Neither fw or kernel passed in command line!");
+    dbgerr_endl();
     return -1;
   }
 
@@ -202,6 +208,19 @@ int main(int argc, char** argv){
     t.join();
   }
   
+  if (sig_mode) {
+    FILE* sf = fopen(signaturefile,"wb");
+    if (sf) {
+      dbg_print("dumping signature");
+      dbg_endl();
+      fwrite(main_mem + 0xF0'0000, 1, 512, sf);
+      fclose(sf);
+    } else {
+      dbg_print("unable to open signature file for writing");
+      dbg_endl();
+    }
+  }
+  
   if (dump_mem_atexit) dump_mem();
   hw_uninit();
   io_uninit();
@@ -283,4 +302,5 @@ void hart_loop(HartState& hs) {
     main_mem[0x1000] = 0;
     */
   }
+  interrupted=true;
 }

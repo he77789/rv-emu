@@ -1,4 +1,5 @@
 #include "io.h"
+#include "cpu.h"
 
 // we are using C-style IO here, as C++ streams do not allow non-blocking IO
 #include <cstdio>
@@ -28,11 +29,13 @@ void io_uninit() {
 }
 
 void dbg_print(const char* msg){
+  if (sig_mode) return;
   printf("%s",msg);
   fflush(stdout);
 }
 
 void dbg_print(int64_t num, bool hex){
+  if (sig_mode) return;
   if (hex) {
     printf("%lx",num);
   } else {
@@ -41,6 +44,7 @@ void dbg_print(int64_t num, bool hex){
 }
 
 void dbg_endl(){
+  if (sig_mode) return;
   printf("\n");
   fflush(stdout);
 }
@@ -80,8 +84,8 @@ bool dbg_fallback = false;
 void pty_init(bool skip) {
   pty_slave_name = new char[PATH_MAX];
   if (skip) {
-    dbgerr_print("PTY init skipped, falling back to emulated IO through debug");
-    dbgerr_endl();
+    dbg_print("PTY init skipped, falling back to emulated IO through debug");
+    dbg_endl();
     dbg_fallback = true;
   } else if (!openpty(&pty_master, &pty_slave, pty_slave_name, NULL, NULL) ) {
     fcntl(pty_master, F_SETFL, O_NONBLOCK);
