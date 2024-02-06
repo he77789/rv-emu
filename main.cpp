@@ -27,10 +27,10 @@ Possible arguments:\n\
 -m <memory size, default 512MiB>\n\
 -c <hart count, default 1>\n\
 -d <path to device tree blob>\n\
+-s <path to signature output>\n\
 -e dump the whole memory into a file named \"mem_dump\" at exit\n\
 -p disable PTY setup for emulated UART terminal, and use stdio instead\n\
 -h print this help message and exit\n\
--s enable signature dumping and specify signature file\
 "
 
 void sigint_handler(int signum);

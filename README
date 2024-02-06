@@ -17,6 +17,7 @@ Possible arguments:
 -m <memory size, default 512MiB>
 -c <hart count, default 1>
 -d <path to device tree blob>
+-s <path to signature output>
 -e dump the whole memory into a file named "mem_dump" at exit
 -p disable PTY setup for emulated UART terminal, and use stdio instead
 -h print this help message and exit
@@ -61,3 +62,10 @@ NS16550A UART serial terminal
 Defaults:
 Memory: 512MiB
 Harts: 1
+
+Signature mode:
+If the -s option is given, the emulator runs in signature mode, for compilance testing.
+Under signature mode, debug info will be disabled.
+Also, the instruction "sltiu zero, t1, 0xbad" (0xbad33013) will halt the emulator.
+When halting, the emulator will dump the memory region denoted by begin_signature and 
+end_signature symbols in the ELF file to the signature file.

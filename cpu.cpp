@@ -44,6 +44,11 @@ bool cycle(HartState &hs){
   HartException exc;
   hs.regs[0] = 0;
   exc = fetch(hs);
+  if (sig_mode && (uint32_t)hs.inst == 0xbad33013) {
+    // in signature mode, the instruction "sltiu zero, t1, 0xbad" will halt the emulator.
+    // this is conforming behaviour, as this instruction is a HINT instruction in RV64I reserved for custom use.
+    return false;
+  }
   /*
   if (hs.inst_len == 0){
     dbg_print("zero instruction!\n");
@@ -69,9 +74,6 @@ bool cycle(HartState &hs){
   }
   */
   if (exc != HartException::NOEXC) {
-    if (exc == HartException::BPOINT && sig_mode) {
-      return false;
-    }
     goto cycle_end;
   }
   
