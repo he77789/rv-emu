@@ -66,9 +66,9 @@ size_t load_elf(int fd, uint64_t mem_offset = 0) {
         GElf_Sym symbol;
         gelf_getsym(data, i, &symbol);
         char* symbol_name = elf_strptr(e, shdr.sh_link, symbol.st_name);
-        if (strcmp(symbol_name, "begin_signature")) {
+        if (strcmp(symbol_name, "begin_signature") == 0) {
           begin_signature = symbol.st_value;
-        } else if (strcmp(symbol_name, "end_signature")) {
+        } else if (strcmp(symbol_name, "end_signature") == 0) {
           end_signature = symbol.st_value;
         }
       }

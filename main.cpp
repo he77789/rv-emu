@@ -225,13 +225,13 @@ int main(int argc, char** argv){
       dbg_print("dumping signature");
       dbg_endl();
       uint64_t sig_difference = end_signature - begin_signature;
-      for (uint64_t offset = 0; offset < sig_difference; offset++) {
+      // due to the required endianness of the output, the signature is written in chunks of 16 bytes
+      for (uint64_t offset = 0; offset < sig_difference; offset += 16) {
         // 2 hex characters per byte
-        fprintf(sf, "%x", main_mem[begin_signature + offset]);
-        if (offset % 16 == 15) {
-          // line break every 32 hex characters
-          fprintf(sf, "\n");
+        for (int64_t chunk_offset = 16 - 1; chunk_offset >= 0; chunk_offset--) {
+          fprintf(sf, "%02x", main_mem[begin_signature - 0x8000'0000 + offset + chunk_offset]);
         }
+        fprintf(sf, "\n");
       }
       fclose(sf);
     } else {
