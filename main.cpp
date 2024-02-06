@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <csignal>
 #include <unistd.h>
+#include <fcntl.h>
 #include <cstring>
 #include <thread>
 #include <vector>
@@ -10,6 +11,7 @@
 #include "io.h"
 #include "constants.h"
 #include "hartexc.h"
+#include "elf.h"
 
 #include "aclint.h"
 #include "plic.h"
@@ -142,26 +144,35 @@ int main(int argc, char** argv){
     //memcpy(main_mem,"\x13\x04\x10\x40\x13\x14\x54\x01\x67\x00\x04\x00",12);
     
     // load the kernel directly in place of the firmware
-    FILE* kf = fopen(kernelfile,"rb");
+    int kf = open(kernelfile, O_RDONLY, 0);
     if (!kf) return 2;
     dbg_print("kernel size:");
-    dbg_print(fread(main_mem,1,MACH_MEM_SIZE,kf));
+    dbg_print(load_elf(kf, 0));
     dbg_endl();
-    fclose(kf);
+    close(kf);
   } else {
-    FILE* bf = fopen(fwfile,"rb");
+    int bf = open(fwfile, O_RDONLY, 0);
     if (!bf) return 1;
     dbg_print("firmware size:");
-    dbg_print(fread(main_mem,1,0x200'0000,bf));
+    dbg_print(load_elf(bf, 0));
     dbg_endl();
-    fclose(bf);
+    close(bf);
     
+    
+    int kf = open(kernelfile, O_RDONLY, 0);
+    if (!kf) return 2;
+    dbg_print("kernel size:");
+    dbg_print(load_elf(kf, 0x20'0000));
+    dbg_endl();
+    close(kf);
+    /*
     FILE* kf = fopen(kernelfile,"rb");
     if (!kf) return 2;
     dbg_print("kernel size:");
-    dbg_print(fread(main_mem+0x20'0000,1,MACH_MEM_SIZE-0x20'0000,kf));
+    dbg_print(fread(main_mem + 0x20'0000,1,0xF0'0000,kf));
     dbg_endl();
     fclose(kf);
+    */
   }
   
   if (dtbfile) { // dtb present
@@ -209,11 +220,19 @@ int main(int argc, char** argv){
   }
   
   if (sig_mode) {
-    FILE* sf = fopen(signaturefile,"wb");
+    FILE* sf = fopen(signaturefile,"w");
     if (sf) {
       dbg_print("dumping signature");
       dbg_endl();
-      fwrite(main_mem + 0xF0'0000, 1, 512, sf);
+      uint64_t sig_difference = end_signature - begin_signature;
+      for (uint64_t offset = 0; offset < sig_difference; offset++) {
+        // 2 hex characters per byte
+        fprintf(sf, "%x", main_mem[begin_signature + offset]);
+        if (offset % 16 == 15) {
+          // line break every 32 hex characters
+          fprintf(sf, "\n");
+        }
+      }
       fclose(sf);
     } else {
       dbg_print("unable to open signature file for writing");

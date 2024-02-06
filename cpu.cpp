@@ -23,6 +23,8 @@ volatile uint64_t breakpoint = 0;
 
 // for signature
 bool sig_mode=false;
+uint64_t begin_signature;
+uint64_t end_signature;
 
 // false to halt
 bool cycle(HartState &hs){

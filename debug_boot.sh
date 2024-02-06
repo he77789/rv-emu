@@ -1,3 +1,3 @@
 #!/bin/bash
 
-gdb --args ./main -d devicetree/singlehart.dtb -f fw_jump.bin -k Image -i images/rootfs.cpio $1
+gdb --args ./main -d devicetree/singlehart.dtb -f fw_jump.elf -k Image -i images/rootfs.cpio $1

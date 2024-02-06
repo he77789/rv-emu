@@ -5,9 +5,10 @@ CXXFLAGS += -Wall -Wextra -pedantic
 CXXFLAGS += -Og -g
 
 LDFLAGS += -fuse-ld=mold
+LDFLAGS += -lelf
 
 BD = build/
-objects = cpu.o mem.o io.o hartexc.o main.o uart.o aclint.o plic.o virtio_mmio_blk.o
+objects = cpu.o mem.o io.o hartexc.o main.o uart.o aclint.o plic.o virtio_mmio_blk.o elf.o
 OBJS := $(objects:%=$(BD)/%)
 
 main: $(OBJS)

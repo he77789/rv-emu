@@ -21,7 +21,10 @@ Possible arguments:
 -p disable PTY setup for emulated UART terminal, and use stdio instead
 -h print this help message and exit
 
-ELF formatted executables are not supported; binaries are expected to be raw binaries created with objdump.
+External libraries used:
+libelf
+
+ELF formatted executables are supported. However, raw binaries created with objdump will also work.
 
 By default, a pseudoterminal is created for the UART IO, which can be accessed with the command `screen /path/to/pty` in another terminal.
 In the diagnostic messages at the start of the emulator, the path to the pty will be printed out.
