@@ -479,11 +479,12 @@ HartException decode_exc(HartState &hs){
                     hs.regs[rd] = (int32_t)hs.regs[rs1] * (int32_t)hs.regs[rs2];
                     break;
 
+                   // N.B. 32-bit int being cast to uint64_t directly does not sign extend, cast to int64_t first.
                    case 0b100:
                     if ((int32_t)hs.regs[rs2] == 0) {
-                      hs.regs[rd] = (int32_t)-1;
+                      hs.regs[rd] = (int64_t)-1;
                     } else if (hs.regs[rs1] == INT32_MIN && hs.regs[rs2] == -1) { // signed division overflow
-                      hs.regs[rd] = hs.regs[rs1];
+                      hs.regs[rd] = (int64_t)(int32_t)hs.regs[rs1];
                     } else {
                       hs.regs[rd] = (int32_t)hs.regs[rs1] / (int32_t)hs.regs[rs2];
                     }
@@ -492,24 +493,24 @@ HartException decode_exc(HartState &hs){
                     if ((uint32_t)hs.regs[rs2] == 0) {
                       hs.regs[rd] = UINT64_MAX; // it's going to be sign-extended anyways
                     } else {
-                      hs.regs[rd] = (int32_t)(((uint32_t)hs.regs[rs1]) / ((uint32_t)hs.regs[rs2]));
+                      hs.regs[rd] = (int64_t)(int32_t)(((uint32_t)hs.regs[rs1]) / ((uint32_t)hs.regs[rs2]));
                     }
                     break;
                   
                   case 0b110:
                     if ((int32_t)hs.regs[rs2] == 0) {
-                      hs.regs[rd] = hs.regs[rs1];
-                    } else if (hs.regs[rs1] == INT32_MIN && hs.regs[rs2] == -1) { // signed division overflow
+                      hs.regs[rd] = (int64_t)(int32_t)hs.regs[rs1];
+                    } else if ((int32_t)hs.regs[rs1] == INT32_MIN && (int32_t)hs.regs[rs2] == -1) { // signed division overflow
                       hs.regs[rd] = 0;
                     } else {
-                      hs.regs[rd] = (int32_t)hs.regs[rs1] % (int32_t)hs.regs[rs2];
+                      hs.regs[rd] = (int64_t)(int32_t)hs.regs[rs1] % (int32_t)hs.regs[rs2];
                     }
                     break;
                   case 0b111:
                     if ((uint32_t)hs.regs[rs2] == 0) {
-                      hs.regs[rd] = hs.regs[rs1];
+                      hs.regs[rd] = (int64_t)(int32_t)hs.regs[rs1];
                     } else {
-                      hs.regs[rd] = (int32_t)(((uint32_t)hs.regs[rs1]) % ((uint32_t)hs.regs[rs2]));
+                      hs.regs[rd] = (int64_t)(int32_t)(((uint32_t)hs.regs[rs1]) % ((uint32_t)hs.regs[rs2]));
                     }
                     break;
                 };
@@ -586,6 +587,11 @@ HartException decode_exc(HartState &hs){
             {
               uint64_t load_addr = hs.regs[rs1] + imm;
               uint64_t lv = 0;
+              
+              if (load_addr % (1 << (funct3 & 0b11)) != 0) {
+                return create_exception(hs,HartException::LMISALIGN, load_addr);
+              }
+              
               if (funct3 & 0b100) {
                 hs.mem_status = true;
                 switch (funct3 - 0b100){
@@ -631,6 +637,11 @@ HartException decode_exc(HartState &hs){
           case inst_op_32::STORE:
             {
               uint64_t store_addr = hs.regs[rs1] + imm;
+              
+              if (store_addr % (1 << (funct3 & 0b11)) != 0) {
+                return create_exception(hs,HartException::SMISALIGN, store_addr);
+              }
+              
               hs.mem_status = false;
               switch (funct3){
                 case 0b00:
