@@ -476,7 +476,7 @@ HartException decode_exc(HartState &hs){
                     break;
 
                    case 0b100:
-                    if (hs.regs[rs2] == 0) {
+                    if ((int32_t)hs.regs[rs2] == 0) {
                       hs.regs[rd] = (int32_t)-1;
                     } else if (hs.regs[rs1] == INT32_MIN && hs.regs[rs2] == -1) { // signed division overflow
                       hs.regs[rd] = hs.regs[rs1];
@@ -485,7 +485,7 @@ HartException decode_exc(HartState &hs){
                     }
                     break;
                   case 0b101:
-                    if (hs.regs[rs2] == 0) {
+                    if ((uint32_t)hs.regs[rs2] == 0) {
                       hs.regs[rd] = UINT64_MAX; // it's going to be sign-extended anyways
                     } else {
                       hs.regs[rd] = (int32_t)(((uint32_t)hs.regs[rs1]) / ((uint32_t)hs.regs[rs2]));
@@ -493,7 +493,7 @@ HartException decode_exc(HartState &hs){
                     break;
                   
                   case 0b110:
-                    if (hs.regs[rs2] == 0) {
+                    if ((int32_t)hs.regs[rs2] == 0) {
                       hs.regs[rd] = hs.regs[rs1];
                     } else if (hs.regs[rs1] == INT32_MIN && hs.regs[rs2] == -1) { // signed division overflow
                       hs.regs[rd] = 0;
@@ -502,7 +502,7 @@ HartException decode_exc(HartState &hs){
                     }
                     break;
                   case 0b111:
-                    if (hs.regs[rs2] == 0) {
+                    if ((uint32_t)hs.regs[rs2] == 0) {
                       hs.regs[rd] = hs.regs[rs1];
                     } else {
                       hs.regs[rd] = (int32_t)(((uint32_t)hs.regs[rs1]) % ((uint32_t)hs.regs[rs2]));
