@@ -112,10 +112,12 @@ void pty_init(bool skip) {
   }
 }
 void pty_uninit() {
-  tcsetattr(pty_master, TCSANOW, &pty_saved_attr);
-  delete pty_slave_name;
-  close(pty_master);
-  close(pty_slave);
+  if (!dbg_fallback) {
+    tcsetattr(pty_master, TCSANOW, &pty_saved_attr);
+    delete pty_slave_name;
+    close(pty_master);
+    close(pty_slave);
+  }
 }
 
 void pty_print(const char* msg) {
