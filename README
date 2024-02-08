@@ -34,7 +34,7 @@ Use -p to disable the pty and do the IO in the same terminal instead.
 Compile-time options can be changed in constants.h
 
 
-Instruction set: RV64IMAZicsr_Zifencei
+Instruction set: RV64IMACZicsr_Zifencei
 Modes Supported: M,S,U
 Virtual Memory: Supports Bare, Sv39, Sv48, Sv57
 

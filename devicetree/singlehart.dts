@@ -19,7 +19,7 @@
       reg = <0>;
       status = "okay";
       compatible = "riscv";
-      riscv,isa = "rv64ima_zifencei_zicsr";
+      riscv,isa = "rv64imacsu_zifencei_zicsr";
       mmu-type = "riscv,sv57";
       riscv,pmpregions = <16>;
       riscv,pmpgranularity = <4>;

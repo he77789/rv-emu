@@ -4,6 +4,9 @@
 // returns the exception it created, if it's not masked
 // if the exception is masked, returns NOEXC
 HartException create_exception(HartState &hs, HartException he, uint64_t tval){
+  // safety precaution: clear instbuf to prevent incorrect caching behaviour at the trap handler
+  hs.instbuf = 0;  
+  
   bool interrupt = (uint64_t)he & (0b1LL << 63);
   uint64_t cause = (uint64_t)he & ~(0b1LL << 63);
   uint64_t int_mask = 0b1LL << cause;
@@ -43,7 +46,7 @@ HartException create_exception(HartState &hs, HartException he, uint64_t tval){
 
     hs.stval = tval;
     
-    hs.pc = hs.stvec & (~0b11); // stvec base
+    hs.pc = hs.stvec & (~0b1); // stvec base
     if ((hs.stvec & 0b11) == 1){ // stvec vectored mode
       hs.pc += 4 * cause;
     }
@@ -67,7 +70,7 @@ HartException create_exception(HartState &hs, HartException he, uint64_t tval){
     
     hs.mtval = tval;
     
-    hs.pc = hs.mtvec & (~0b11); // mtvec base
+    hs.pc = hs.mtvec & (~0b1); // mtvec base
     if ((hs.mtvec & 0b11) == 1){ // mtvec vectored mode
       hs.pc += 4 * cause;
     }

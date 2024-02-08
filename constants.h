@@ -23,8 +23,11 @@ inline HartState* hartlist;
 // slow down ACLINT MTIMER clock to increment once every cycle, instead of real-time
 //#define SLOW_MTIMER
 
-// RV64IMA with M,S,U mode
-#define MISA (0b10LL << 62) + 0b00000101000001000100000001LL
+// allow misaligned loads and stores
+#define ALLOW_MISALIGN
+
+// RV64IMAC with M,S,U mode
+#define MISA (0b10LL << 62) + 0b00000101000001000100000101LL
 
 #define MSTATUS 0b00000000'00000000'00000000'00001010'00000000'00101100'00001000'10101010LL
 
