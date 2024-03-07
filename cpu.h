@@ -103,12 +103,27 @@ enum class inst_op_32 : uint16_t {
 	MADD    ,MSUB    ,NMSUB   ,NMADD   ,OP_FP   ,RES1    ,CST2     ,L3,
 	BRANCH  ,JALR    ,RES2    ,JAL     ,SYSTEM  ,RES3    ,CST3     ,L4
 };
-const inst_type inst_type_32[] = {
+const inst_type inst_type_lookup_32[] = {
 	inst_type::I   ,inst_type::DIFF,inst_type::DIFF,inst_type::I   ,inst_type::I   ,inst_type::U   ,inst_type::I   ,inst_type::DIFF,
 	inst_type::S   ,inst_type::DIFF,inst_type::DIFF,inst_type::R   ,inst_type::R   ,inst_type::U   ,inst_type::R   ,inst_type::DIFF,
 	inst_type::R4  ,inst_type::R4  ,inst_type::R4  ,inst_type::R4  ,inst_type::R   ,inst_type::DIFF,inst_type::DIFF,inst_type::DIFF,
 	inst_type::B   ,inst_type::I   ,inst_type::DIFF,inst_type::J   ,inst_type::I   ,inst_type::DIFF,inst_type::DIFF,inst_type::DIFF
 };
+
+enum class inst_type_16 {CR, CI, CSS, CIW, CL, CS, CA, CB, CJ, DIFF};
+// index is encoded as (inst[1:0|15:13]) such that the range is contiguous
+enum class inst_op_16 : uint8_t {
+  ADDI4SPN=0, FLD, LW, LD, RES1, FSD, SW, SD,
+  ADDI, ADDIW, LI, LUI, MISC_ALU, J, BEQZ, BNEZ,
+  SLLI, FLDSP, LWSP, LDSP, JALR, FSDSP, SWSP, SDSP
+};
+/*
+const inst_type_16 inst_type_lookup_16[] = {
+  inst_type_16::CIW, inst_type_16::CL, inst_type_16::CL, inst_type_16::CL, inst_type_16::DIFF, inst_type_16::CS, inst_type_16::CS, inst_type_16::CS,
+  inst_type_16::CI, inst_type_16::CI, inst_type_16::CI, inst_type_16::CI, inst_type_16::DIFF, inst_type_16::CJ, inst_type_16::CB, inst_type_16::CB,
+  inst_type_16::CI, inst_type_16::CI, inst_type_16::CI, inst_type_16::CI, inst_type_16::CR, inst_type_16::CI, inst_type_16::CI, inst_type_16::CI
+}
+*/
 
 //bool chk_ill_csr(uint16_t csrno);
 bool chk_ro0_csr(uint16_t csrno);

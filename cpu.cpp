@@ -117,7 +117,7 @@ HartException fetch(HartState &hs){
   if (hs.inst == 0 || (uint32_t)hs.inst == 0xffffffff) {hs.inst_len = 0; return create_exception(hs,HartException::ILLINST, hs.inst);}
   
   // check instruction length
-  if (!(hs.inst & 0b11)){
+  if ((hs.inst & 0b11) != 0b11){
     hs.inst_len = 16;
   } else if ((hs.inst & 0b11100) != 0b11100){
     hs.inst_len = 32;
@@ -131,7 +131,10 @@ HartException fetch(HartState &hs){
   // handle instruction length
   switch (hs.inst_len){
     case 16: // split into two instructions
-      hs.instbuf = hs.inst >> 16;
+      if ((hs.inst & (0x30000)) != 0x30000) {
+        // buffer the instruction only if it's actually an RVC instruction
+        hs.instbuf = hs.inst >> 16;
+      }
       hs.inst &= 0xFFFF;
       break;
     case 32: // the instruction is already in the right place
@@ -143,20 +146,314 @@ HartException fetch(HartState &hs){
   return HartException::NOEXC;
 }
 
+#define REG16TO32(X) ((X)+8)
 HartException decode_exc(HartState &hs){
   // decode
   uint8_t opcode = hs.inst & 0x0000007f; // 6-0 bits
   
+  inst_op_16 op_fun_16 = (inst_op_16)0b11111;
   inst_op_32 op_fun = (inst_op_32)0b11111;
   inst_type op_type = inst_type::DIFF;
   uint8_t rd = 0, rs1 = 0, rs2 = 0/*, rs3 = 0*/;
   uint8_t /*funct2 = 0,*/ funct3 = 0, funct7 = 0;
   int64_t imm = 0;
   
+  bool cebreak = false;
+  
   switch (hs.inst_len){
+    // start of RVC
+    case 16:
+      op_fun_16 = (inst_op_16)(((hs.inst & 0b11) << 3) + ((hs.inst & 0xE000) >> 13));
+      
+      rd = REG16TO32((hs.inst >> 2) & 0b111);
+      rs1 = REG16TO32((hs.inst >> 7) & 0b111);
+      switch (op_fun_16) {
+        case inst_op_16::ADDI4SPN:
+          op_fun = inst_op_32::OP_IMM;
+          funct3 = 0b000;
+          rs1 = 2;
+          // unscramble nzuimm
+          imm = (hs.inst >> 1) & 0b1111000000; // 9:6
+          imm += (hs.inst >> 7) & 0b110000; // 5:4
+          imm += (hs.inst >> 2) & 0b1000; // 3
+          imm += (hs.inst >> 4) & 0b100; // 2
+          break;
+        case inst_op_16::FLD:
+          // TODO
+          break;
+        case inst_op_16::LW:
+          op_fun = inst_op_32::LOAD;
+          funct3 = 0b010;
+          // unscramble offset
+          imm = (hs.inst << 1) & 0b1000000; // 6
+          imm += (hs.inst >> 7) & 0b111000; // 5:3
+          imm += (hs.inst >> 4) & 0b100; // 2
+          break;
+        case inst_op_16::LD:
+          op_fun = inst_op_32::LOAD;
+          funct3 = 0b011;
+          // unscramble offset
+          imm = (hs.inst << 1) & 0b11000000; // 7:6
+          imm += (hs.inst >> 7) & 0b111000; // 5:3
+          break;
+        case inst_op_16::RES1:
+          return create_exception(hs, HartException::ILLINST, hs.inst);
+        case inst_op_16::FSD:
+          // TODO
+          break;
+        case inst_op_16::SW:
+          op_fun = inst_op_32::STORE;
+          funct3 = 0b010;
+          rs2 = rd;
+          // unscramble offset
+          imm = (hs.inst << 1) & 0b1000000; // 6
+          imm += (hs.inst >> 7) & 0b111000; // 5:3
+          imm += (hs.inst >> 4) & 0b100; // 2
+          break;
+        case inst_op_16::SD:
+          op_fun = inst_op_32::STORE;
+          funct3 = 0b011;
+          rs2 = rd;
+          // unscramble offset
+          imm = (hs.inst << 1) & 0b11000000; // 7:6
+          imm += (hs.inst >> 7) & 0b111000; // 5:3
+          break;
+        case inst_op_16::ADDI:
+          op_fun = inst_op_32::OP_IMM;
+          funct3 = 0b000;
+          rd = (hs.inst >> 7) & 0b11111;
+          rs1 = rd;
+          // unscramble imm
+          imm = (hs.inst >> 7) & 0b100000; // 5
+          imm += (hs.inst >> 2) & 0b11111; // 4:0
+          // sign-extend imm
+          imm = (int64_t)(imm << 58) >> 58;
+          break;
+        case inst_op_16::ADDIW:
+          op_fun = inst_op_32::OP_IMM_32;
+          funct3 = 0b000;
+          rd = (hs.inst >> 7) & 0b11111;
+          rs1 = rd;
+          // unscramble imm
+          imm = (hs.inst >> 7) & 0b100000; // 5
+          imm += (hs.inst >> 2) & 0b11111; // 4:0
+          // sign-extend imm
+          imm = (int64_t)(imm << 58) >> 58;
+          break;
+        case inst_op_16::LI:
+          op_fun = inst_op_32::OP_IMM;
+          funct3 = 0b000;
+          rd = (hs.inst >> 7) & 0b11111;
+          rs1 = 0;
+          // unscramble imm
+          imm = (hs.inst >> 7) & 0b100000; // 5
+          imm += (hs.inst >> 2) & 0b11111; // 4:0
+          // sign-extend imm
+          imm = (int64_t)(imm << 58) >> 58;
+          break;
+        case inst_op_16::LUI:
+          rd = (hs.inst >> 7) & 0b11111;
+          if (rd == 2) {
+            // C.ADDI16SP
+            op_fun = inst_op_32::OP_IMM;
+            funct3 = 0b000;
+            rs1 = 2;
+            rd = 2;
+            // unscramble imm
+            imm = (hs.inst >> 3) & 0b1000000000; // 9
+            imm += (hs.inst << 4) & 0b110000000; // 8:7
+            imm += (hs.inst << 1) & 0b1000000; // 6
+            imm += (hs.inst << 3) & 0b100000; // 5
+            imm += (hs.inst >> 2) & 0b10000; // 4
+            // sign-extend imm
+            imm = (int64_t)(imm << 54) >> 54;
+          } else {
+            // C.LUI
+            op_fun = inst_op_32::LUI;
+            // unscramble imm
+            imm = (hs.inst << 5) & 0x20000; // 17
+            imm += (hs.inst << 10) & 0x1F000; // 16:12
+            // sign-extend imm
+            imm = (int64_t)(imm << 46) >> 46;
+          }
+          break;
+        case inst_op_16::MISC_ALU:
+          rs2 = REG16TO32((hs.inst >> 2) & 0b111);
+          rd = rs1;
+          
+          // unscramble imm
+          imm = (hs.inst >> 7) & 0b100000; // 5
+          imm += (hs.inst >> 2) & 0b11111; // 4:0
+          switch ((hs.inst >> 10) & 0b11) {
+            case 0b00:
+              op_fun = inst_op_32::OP_IMM;
+              funct3 = 0b101;
+              hs.inst &= ~(0b1 << 30);
+              break;
+            case 0b01:
+              op_fun = inst_op_32::OP_IMM;
+              funct3 = 0b101;
+              hs.inst |= 0b1 << 30;
+              break;
+            case 0b10:
+              op_fun = inst_op_32::OP_IMM;
+              funct3 = 0b111;
+              // sign-extend imm
+              imm = (int64_t)(imm << 58) >> 58;
+              break;
+            case 0b11:
+              if (hs.inst & (1 << 12)) {
+                if (!(hs.inst & (1 << 5))) {
+                  // C.SUBW, otherwise C.ADDW
+                  hs.inst |= 1 << 30;
+                }
+                op_fun = inst_op_32::OP_32;
+                funct3 = 0b000;
+              } else {
+                op_fun = inst_op_32::OP;
+                switch ((hs.inst >> 5) & 0b11) {
+                  case 0b00: // C.SUB
+                    hs.inst |= 0b1 << 30;
+                    funct3 = 0b000;
+                    break;
+                  case 0b01: // C.XOR
+                    funct3 = 0b100;
+                    break;
+                  case 0b10: // C.OR
+                    funct3 = 0b110;
+                    break;
+                  case 0b11: // C.AND
+                    funct3 = 0b111;
+                    break;
+                }
+              }
+              break;
+          }
+          break;
+        case inst_op_16::J:
+          op_fun = inst_op_32::JAL;
+          rd = 0;
+          rs1 = (hs.inst >> 7) & 0b11111;
+          // unscramble offset
+          imm = (hs.inst >> 1) & 0xB40;
+          imm += (hs.inst >> 2) & 0xE;
+          imm += (hs.inst >> 7) & 0x10;
+          imm += (hs.inst << 1) & 0x80;
+          imm += (hs.inst << 2) & 0x400;
+          imm += (hs.inst << 3) & 0x20;
+          // sign-extend offset
+          imm = (int64_t)(imm << 52) >> 52;
+          break;
+        case inst_op_16::BEQZ:
+        case inst_op_16::BNEZ:
+          op_fun = inst_op_32::BRANCH;
+          funct3 = (hs.inst >> 13) & 1;
+          rs2 = 0;
+          // unscramble offset
+          imm = (hs.inst >> 4) & 0b100000000; // 8
+          imm += (hs.inst << 1) & 0b11000000; // 7:6
+          imm += (hs.inst << 3) & 0b100000; // 5
+          imm += (hs.inst >> 7) & 0b11000; // 4:3
+          imm += (hs.inst >> 2) & 0b110; // 2:1
+          // sign-extend offset
+          imm = (int64_t)(imm << 55) >> 55;
+          break;
+        case inst_op_16::SLLI:
+          op_fun = inst_op_32::OP_IMM;
+          funct3 = 0b001;
+          rs1 = (hs.inst >> 7) & 0b11111;
+          rd = rs1;
+          // unscramble imm
+          imm = (hs.inst >> 7) & 0b100000; // 5
+          imm += (hs.inst >> 2) & 0b11111; // 4:0
+          break;
+        case inst_op_16::FLDSP:
+          // TODO
+          break;
+        case inst_op_16::LWSP:
+          op_fun = inst_op_32::LOAD;
+          funct3 = 0b010;
+          rd = (hs.inst >> 7) & 0b11111;
+          rs1 = 2;
+          // unscramble offset
+          imm = (hs.inst << 4) & 0b11000000; // 7:6
+          imm += (hs.inst >> 7) & 0b100000; // 5
+          imm += (hs.inst >> 2) & 0b11100; // 4:2
+          break;
+        case inst_op_16::LDSP:
+          op_fun = inst_op_32::LOAD;
+          funct3 = 0b011;
+          rd = (hs.inst >> 7) & 0b11111;
+          rs1 = 2;
+          // unscramble offset
+          imm = (hs.inst << 4) & 0b111000000; // 8:6
+          imm += (hs.inst >> 7) & 0b100000; // 5
+          imm += (hs.inst >> 2) & 0b11000; // 4:3
+          break;
+        case inst_op_16::JALR:
+          if (hs.inst == 0x9002) {
+            // C.EBREAK
+            op_fun = inst_op_32::SYSTEM;
+            cebreak = true;
+            break;
+          }
+          rs1 = (hs.inst >> 7) & 0b11111;
+          rs2 = (hs.inst >> 2) & 0b11111;
+          if (hs.inst & (1 << 12)) {
+            if (rs2) {
+              // C.ADD
+              op_fun = inst_op_32::OP;
+              funct3 = 0b000;
+              rd = rs1;
+            } else {
+              // C.JALR
+              op_fun = inst_op_32::JALR;
+              rd = 1;
+              imm = 0;
+            }
+          } else {
+            if (rs2) {
+              // C.MV
+              op_fun = inst_op_32::OP;
+              funct3 = 0b000;
+              rd = rs1;
+              rs1 = 0;
+            } else {
+              // C.JR
+              op_fun = inst_op_32::JALR;
+              rd = 0;
+              imm = 0;
+            }
+          }
+          break;
+        case inst_op_16::FSDSP:
+          // TODO
+          break;
+        case inst_op_16::SWSP:
+          op_fun = inst_op_32::STORE;
+          funct3 = 0b010;
+          rs2 = (hs.inst >> 2) & 0b11111;
+          rs1 = 2;
+          // unscramble offset
+          imm = (hs.inst >> 1) & 0b11000000; // 7:6
+          imm += (hs.inst >> 7) & 0b111100; // 5:2
+          break;
+        case inst_op_16::SDSP:
+          op_fun = inst_op_32::STORE;
+          funct3 = 0b011;
+          rs2 = (hs.inst >> 2) & 0b11111;
+          rs1 = 2;
+          // unscramble offset
+          imm = (hs.inst >> 1) & 0b111000000; // 8:6
+          imm += (hs.inst >> 7) & 0b111000; // 5:3
+          break;
+      }
+      break;
+    // end of RVC  
+    
     case 32:
       op_fun = (inst_op_32)((opcode >> 2) & 0b11111);
-      op_type = inst_type_32[(uint16_t)op_fun];
+      op_type = inst_type_lookup_32[(uint16_t)op_fun];
       
       rd = (hs.inst >> 7) & 0b11111;
       rs1 = (hs.inst >> 15) & 0b11111; 
@@ -247,6 +544,7 @@ HartException decode_exc(HartState &hs){
   bool pc_chgd = false; // true if pc changed by execution, disables pc increment
   
   switch (hs.inst_len){
+    case 16: // RVC reuses all execution code of RVI
     case 32:
       switch (op_fun){
         // in the order shown in the risc-v spec version 20191213 document
@@ -588,9 +886,11 @@ HartException decode_exc(HartState &hs){
               uint64_t load_addr = hs.regs[rs1] + imm;
               uint64_t lv = 0;
               
+              #ifndef ALLOW_MISALIGN
               if (load_addr % (1 << (funct3 & 0b11)) != 0) {
                 return create_exception(hs,HartException::LMISALIGN, load_addr);
               }
+              #endif
               
               if (funct3 & 0b100) {
                 hs.mem_status = true;
@@ -638,9 +938,11 @@ HartException decode_exc(HartState &hs){
             {
               uint64_t store_addr = hs.regs[rs1] + imm;
               
+              #ifndef ALLOW_MISALIGN
               if (store_addr % (1 << (funct3 & 0b11)) != 0) {
                 return create_exception(hs,HartException::SMISALIGN, store_addr);
               }
+              #endif
               
               hs.mem_status = false;
               switch (funct3){
@@ -661,7 +963,10 @@ HartException decode_exc(HartState &hs){
             }
             break;
           case inst_op_32::MISC_MEM:
-            // currently, memory accesses are synchronous, so FENCE and FENCE.I instructions are nop
+            // currently, memory accesses are synchronous, so FENCE instructions are nop
+            if (funct3 == 0b001) { // FENCE.I
+              hs.instbuf = 0;
+            }
             break;
             
           case inst_op_32::SYSTEM:
@@ -673,7 +978,7 @@ HartException decode_exc(HartState &hs){
               HartException ecallval = (HartException)(hs.privmode + 8);
               return create_exception(hs,ecallval, hs.pc);
             }
-            if (hs.inst == 0b000000000001'00000'000'00000'1110011) { // EBREAK
+            if (hs.inst == 0b000000000001'00000'000'00000'1110011 || cebreak) { // EBREAK
               /*
               dbg_print("EBREAK called at ");
               dbg_print(hs.pc);
@@ -687,7 +992,7 @@ HartException decode_exc(HartState &hs){
               hs.mstatus = (hs.mstatus & ~(0b1 << 3)) | ((hs.mstatus & (0b1 << 7)) >> (7-3)); // move mstatus.MPIE to mstatus.MIE
               hs.mstatus |= (0b1 << 7); // set mstatus.MPIE
               
-              hs.pc = hs.mepc & ~(0b11); // mepc
+              hs.pc = hs.mepc & ~(0b1); // mepc
               pc_chgd = true;
               
               hs.privmode = (hs.mstatus & (0b11 << 11)) >> 11; // mstatus.MPP
@@ -705,7 +1010,7 @@ HartException decode_exc(HartState &hs){
               hs.mstatus = (hs.mstatus & ~(0b1 << 1)) | ((hs.mstatus & (0b1 << 5)) >> (5-1)); // move mstatus.SPIE to mstatus.SIE
               hs.mstatus |= (0b1 << 5); // set mstatus.SPIE
       
-              hs.pc = hs.sepc & ~(0b11); // sepc
+              hs.pc = hs.sepc & ~(0b1); // sepc
               pc_chgd = true;
               
               hs.privmode = (hs.mstatus & (0b1 << 8)) >> 8; // mstatus.SPP
@@ -732,6 +1037,8 @@ HartException decode_exc(HartState &hs){
               }
               // always clears the whole TLB, which is a valid behaviour
               tlb_clear(&hs.tlb);
+              // invalidate instruction buffer
+              hs.instbuf = 0;
               break;
             }
             
@@ -974,6 +1281,9 @@ HartException decode_exc(HartState &hs){
   
   if (!pc_chgd) {
     hs.pc += hs.inst_len / 8;
+  } else {
+    // invalidate instruction buffer
+    hs.instbuf = 0;
   }
   
   hs.minstret++; // minstret CSR
