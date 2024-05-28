@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-constexpr uint16_t TLB_SIZE = 16;
+constexpr uint16_t TLB_SIZE = 64;
 
 struct TLBEntry {
   uint64_t virt_page;
@@ -13,9 +13,10 @@ struct TLBEntry {
   uint8_t permissions;
   bool user;
 };
-// simple ring buffer
+// simple hash table to store TLB entries
 struct TLBStruct {
-  uint16_t next_entry;
+  int8_t max_entry_size;
+  uint8_t size_count[6]; // count number of entries for each size
   TLBEntry tlb_entries[TLB_SIZE];
 };
 
