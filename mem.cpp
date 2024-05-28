@@ -128,6 +128,9 @@ uint8_t chk_pmp_range(HartState& hs, uint64_t addrl, uint64_t addrh){
 }
 
 void sync_exp_pmp(HartState& hs) {
+  hs.pmp_all_enabled = false;
+  hs.min_lbound = 0xffffffffffffffff;
+  hs.max_ubound = 0x0;
   for (size_t i = 0; i < PMP_COUNT; i++) {
     const uint8_t raw_pmp_a = (hs.pmpcfg[i] & 0b11000) >> 3;
     if (!raw_pmp_a) { // this PMP is disabled
@@ -161,11 +164,23 @@ void sync_exp_pmp(HartState& hs) {
           break;
       }
       hs.pmp_expanded[i].lxwr = hs.pmpcfg[i] & 0b10000111;
+
+      bool is_rwx = hs.pmp_expanded[i].lxwr == 0b111;
+      if (hs.pmp_expanded[i].lbound < hs.min_lbound && !is_rwx) hs.min_lbound = hs.pmp_expanded[i].lbound;
+      if (hs.pmp_expanded[i].ubound > hs.max_ubound && !is_rwx) hs.max_ubound = hs.pmp_expanded[i].ubound;
+      if (hs.pmp_expanded[i].lbound == 0x0 && hs.pmp_expanded[i].ubound == 0xffffffffffffffff && is_rwx) {
+        hs.pmp_all_enabled = true;
+      }
     }
   }
 }
 
 uint16_t chk_pmp_exp(HartState& hs, uint64_t addr) {
+  if (hs.pmp_all_enabled) {
+    if (addr > hs.max_ubound || addr < hs.min_lbound) {
+      return 0b111 << 6; // it is certainly RWX
+    }
+  }
   for (size_t i = 0; i < PMP_COUNT; i++) {
     const ExpPMP thispmp = hs.pmp_expanded[i];
     if (!thispmp.enable) continue;
@@ -175,6 +190,12 @@ uint16_t chk_pmp_exp(HartState& hs, uint64_t addr) {
   return 0xFFF0;
 }
 uint8_t chk_pmp_range_exp(HartState& hs, uint64_t addrl, uint64_t addrh) {
+  if (hs.pmp_all_enabled) {
+    if (addrl > hs.max_ubound || addrh < hs.min_lbound) {
+      return 0b111; // it is certainly RWX
+    }
+  }
+
   for (size_t i = 0; i < PMP_COUNT; i++) {
     const ExpPMP thispmp = hs.pmp_expanded[i];
     if (!thispmp.enable) continue;

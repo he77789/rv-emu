@@ -70,6 +70,14 @@ struct HartState {
   uint64_t pmpaddr[PMP_COUNT];
   bool pmp_lockedaddr[PMP_COUNT]; // bitfield to control locked pmpaddr
   ExpPMP pmp_expanded[PMP_COUNT];
+  /* these variables mark the smallest range that contains all locked or non-RWX
+   * PMP regions.
+   * If there is a memory region covering the whole address space allowing RWX
+   * without lock, and our memory address is outside of [min_lbound, max_ubound),
+   * then we can short circuit and allow the memory access to be made.
+   */
+  uint64_t pmp_all_enabled;
+  uint64_t min_lbound, max_ubound;
   
   bool chk_int; // signal hart to check interrupts in the next cycle
 };
