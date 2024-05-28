@@ -376,9 +376,17 @@ uint64_t tlb_find(HartState& hs, uint64_t virt_addr, uint8_t perms) {
 // hash table of TLB entries
 void tlb_add(TLBStruct &tlb, TLBEntry tlb_entry) {
   uint64_t index = tlb_hash(tlb_entry.virt_page);
-  if (tlb_entry.size > tlb.max_entry_size) {
-    tlb.max_entry_size = tlb_entry.size; // update max entry size if needed
+
+  TLBEntry old_entry = tlb.tlb_entries[index];
+  if (old_entry.permissions != 0) { // we are replacing a valid entry
+    tlb.size_count[old_entry.size] -= 1;
   }
+  tlb.size_count[tlb_entry.size] += 1;
+  tlb.max_entry_size = 0;
+  for (uint8_t i = 0; i < 6 ; i++) {
+    if (tlb.size_count[i] > 0) tlb.max_entry_size = i;
+  }
+
   tlb.tlb_entries[index] = tlb_entry; // add entry to hash table
 }
 

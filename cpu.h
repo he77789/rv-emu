@@ -16,6 +16,7 @@ struct TLBEntry {
 // simple hash table to store TLB entries
 struct TLBStruct {
   int8_t max_entry_size;
+  uint8_t size_count[6]; // count number of entries for each size
   TLBEntry tlb_entries[TLB_SIZE];
 };
 
