@@ -78,6 +78,7 @@ void dump_mem();
 
 // TLB handling functions
 void tlb_clear(TLBStruct *tlb);
+uint16_t tlb_hash(uint64_t addr);
 uint64_t tlb_find(HartState& hs, uint64_t virt_addr, uint8_t perms);
 void tlb_add(TLBStruct &tlb, TLBEntry tlb_entry);
 

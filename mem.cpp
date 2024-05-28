@@ -332,12 +332,20 @@ void tlb_clear(TLBStruct *tlb) {
   memset(tlb, 0, sizeof(TLBStruct));
 }
 
+// hash function for the hash table used for the TLB
+uint16_t tlb_hash(uint64_t addr) {
+  // 106039 / 2^16 is an approximation of the golden ratio
+  return ((106039 * addr) >> 16) % TLB_SIZE;
+}
+
 // find cached translation in TLB if it exists, returns 0x0 otherwise
 uint64_t tlb_find(HartState& hs, uint64_t virt_addr, uint8_t perms) {
   if (!hs.satp) return virt_addr; // virtual memory disabled
-  for (size_t i = 0; i < TLB_SIZE; i++) {
-    TLBEntry curr_entry = hs.tlb.tlb_entries[i];
-    uint8_t offset_size = 12 + 9 * curr_entry.size;
+  for (int8_t i = hs.tlb.max_entry_size; i >= 0; i--) {
+    uint8_t offset_size = 12 + 9 * i;
+    TLBEntry curr_entry = hs.tlb.tlb_entries[tlb_hash(virt_addr & (UINT64_ALL_ONES << offset_size))];
+    if (i != curr_entry.size) continue; // just a collision of an entry with a different size
+
     if (!curr_entry.permissions) continue; // perms are all unset, invalid entry
     //if ( (virt_addr & (UINT64_ALL_ONES << offset_size)) == curr_entry.virt_page) {
     if ((virt_addr ^ curr_entry.virt_page) < (1ULL << (offset_size))) {
@@ -365,12 +373,13 @@ uint64_t tlb_find(HartState& hs, uint64_t virt_addr, uint8_t perms) {
   return 0x0; // TLB miss
 }
 
-// ring buffer of TLB entries
+// hash table of TLB entries
 void tlb_add(TLBStruct &tlb, TLBEntry tlb_entry) {
-  tlb.tlb_entries[tlb.next_entry] = tlb_entry;
-  if (++tlb.next_entry == TLB_SIZE) {
-    tlb.next_entry = 0;
+  uint64_t index = tlb_hash(tlb_entry.virt_page);
+  if (tlb_entry.size > tlb.max_entry_size) {
+    tlb.max_entry_size = tlb_entry.size; // update max entry size if needed
   }
+  tlb.tlb_entries[index] = tlb_entry; // add entry to hash table
 }
 
 template <> uint8_t mem_fetch<uint8_t>(HartState& hs, uint64_t addr){
